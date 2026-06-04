@@ -1,0 +1,26 @@
+{
+  "thread_group": "Create User Thread Group",
+  "base_sampler": "Create User - positive",
+  "required_fields": ["username", "password"],
+  "optional_fields": ["nickname"],
+  "hidden_fields": ["id"],
+  "field_types": {
+    "username": "string",
+    "age": "integer"
+  },
+  "boundary_values": {
+    "username": {
+      "min_length": 2,
+      "max_length": 20
+    },
+    "age": {
+      "min": 1,
+      "max": 120
+    }
+  },
+  "jdbc_cleanup": {
+    "allow_modify": true,
+    "sampler_name": "cleanup user data",
+    "full_sql": "DELETE FROM user_info WHERE username = '${username}'"
+  }
+}

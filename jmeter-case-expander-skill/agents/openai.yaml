@@ -1,0 +1,7 @@
+interface:
+  display_name: "JMeter Case Expander"
+  short_description: "Expand JMeter thread group API cases conservatively."
+  default_prompt: "Use $jmeter-threadgroup-case-expander to expand a target JMeter thread group with high-value API test cases and safe JDBC cleanup fixes."
+
+policy:
+  allow_implicit_invocation: true
