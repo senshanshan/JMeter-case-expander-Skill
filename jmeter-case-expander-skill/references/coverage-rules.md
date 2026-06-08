@@ -12,7 +12,7 @@ Expand in this order and stop when the input data no longer supports a case with
 6. Single-space string
 7. Type mismatch
 8. Boundary overflow or underflow
-9. Hidden field override attempt
+9. Hidden value matrix: allowed correct values, type-invalid values, business-invalid values, tamper values, unauthorized values
 10. Extra undefined field
 
 ## Required fields
@@ -38,12 +38,34 @@ Only add a single-space variant when the business context suggests whitespace is
 
 ## Hidden fields
 
-Do not brute-force hidden fields. Add at most one or two focused checks:
+Hidden values must be covered as their own ordered matrix. For every hidden field with enough rule data, generate cases in this order:
 
-- hidden field injected when absent from the baseline
-- hidden field overwritten when present in the baseline
+1. Business-allowed correct values
+2. Type-invalid values
+3. Business-invalid values
+4. Tampering and unauthorized-access values
 
-Use obvious marker values such as `__AUTO_HIDDEN__` so reviewers can spot the case quickly.
+Keep each case one-field-at-a-time. Do not combine hidden-field mutations with required-field,
+optional-field, boundary, or extra-field mutations.
+
+Use these spec keys when available:
+
+- `allowed_values`: values the business allows, including the baseline value when it is valid
+- `type_invalid_values`: values with the wrong JSON or parameter type
+- `business_invalid_values`: values with the right type but rejected by business rules
+- `tamper_values`: altered hidden values that should fail integrity or anti-tamper checks
+- `unauthorized_values`: values belonging to another user, tenant, role, org, store, or data scope
+
+If only `hidden_fields` is provided, still add focused tamper and unauthorized marker cases so reviewers
+can see the risk area. Use obvious marker values such as `__AUTO_HIDDEN_TAMPER__` and
+`__AUTO_HIDDEN_UNAUTHORIZED__`.
+
+Do not brute-force hidden fields. Skip speculative values when neither the baseline nor the spec gives
+enough context to produce a meaningful case, and report the gap.
+
+Prefer naming that exposes the coverage layer, for example `hidden allowed orderId`,
+`hidden type invalid orderId`, `hidden business invalid orderId`, `hidden tamper orderId`, and
+`hidden unauthorized orderId`.
 
 ## Extra undefined fields
 

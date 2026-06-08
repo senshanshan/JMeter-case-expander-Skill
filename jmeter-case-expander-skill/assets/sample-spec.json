@@ -3,7 +3,16 @@
   "base_sampler": "Create User - positive",
   "required_fields": ["username", "password"],
   "optional_fields": ["nickname"],
-  "hidden_fields": ["id"],
+  "hidden_fields": [
+    {
+      "name": "id",
+      "allowed_values": [1001],
+      "type_invalid_values": ["not-an-integer"],
+      "business_invalid_values": [-1, 0],
+      "tamper_values": [999999],
+      "unauthorized_values": [2002]
+    }
+  ],
   "field_types": {
     "username": "string",
     "age": "integer"
