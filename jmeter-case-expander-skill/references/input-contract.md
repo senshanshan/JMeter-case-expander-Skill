@@ -30,7 +30,16 @@ Use a JSON file shaped like this:
   "base_sampler": "Create User - positive",
   "required_fields": ["username", "password"],
   "optional_fields": ["nickname"],
-  "hidden_fields": ["id"],
+  "hidden_fields": [
+    {
+      "name": "id",
+      "allowed_values": ["${id}"],
+      "type_invalid_values": ["not-an-integer"],
+      "business_invalid_values": [-1, 0],
+      "tamper_values": [999999],
+      "unauthorized_values": ["${other_user_id}"]
+    }
+  ],
   "rename_base_sampler_to": "1.全必填正常情况",
   "remove_samplers": ["2.旧的自动生成用例"],
   "field_types": {
@@ -72,4 +81,6 @@ Use a JSON file shaped like this:
 - If `base_sampler` is omitted, the first HTTP sampler in the target thread group is used.
 - If `jdbc_cleanup.allow_modify` is false or missing, cleanup SQL is reviewed but not changed.
 - If `case_plan` is provided, it overrides the default auto-generated English mutation list and preserves the given order exactly.
+- `hidden_fields` may be a string list for simple marker cases, or objects with `name`, `allowed_values`, `type_invalid_values`, `business_invalid_values`, `tamper_values`, and `unauthorized_values`.
+- Hidden value cases are generated in this order: allowed correct values, type-invalid values, business-invalid values, tamper values, unauthorized values.
 - Prefer Chinese sampler names with explicit numbering such as `1.全必填正常情况`, `2.必填编号缺失`.

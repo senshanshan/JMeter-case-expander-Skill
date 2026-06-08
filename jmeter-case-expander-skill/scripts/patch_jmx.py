@@ -235,6 +235,104 @@ def mismatch_value(field_type: str) -> Any:
     return mapping.get(field_type.lower(), "__TYPE_MISMATCH__")
 
 
+def listify(value: Any) -> List[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def normalize_hidden_fields(spec: Dict[str, Any], base_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rules_by_name: Dict[str, Dict[str, Any]] = {}
+
+    for item in spec.get("hidden_fields", []):
+        if isinstance(item, dict):
+            field_name = item.get("name") or item.get("field")
+            if not field_name:
+                continue
+            rules_by_name[str(field_name)] = dict(item)
+            rules_by_name[str(field_name)]["name"] = str(field_name)
+        else:
+            field_name = str(item)
+            rules_by_name[field_name] = {
+                "name": field_name,
+                "legacy_override_only": True,
+                "tamper_values": ["__AUTO_HIDDEN__"],
+                "unauthorized_values": [],
+            }
+
+    hidden_value_rules = spec.get("hidden_value_rules") or {}
+    if isinstance(hidden_value_rules, dict):
+        for field_name, rule in hidden_value_rules.items():
+            merged = dict(rules_by_name.get(str(field_name), {"name": str(field_name)}))
+            if isinstance(rule, dict):
+                merged.update(rule)
+            else:
+                merged["allowed_values"] = listify(rule)
+            merged["name"] = str(field_name)
+            rules_by_name[str(field_name)] = merged
+    elif isinstance(hidden_value_rules, list):
+        for item in hidden_value_rules:
+            if not isinstance(item, dict):
+                continue
+            field_name = item.get("name") or item.get("field")
+            if not field_name:
+                continue
+            merged = dict(rules_by_name.get(str(field_name), {"name": str(field_name)}))
+            merged.update(item)
+            merged["name"] = str(field_name)
+            rules_by_name[str(field_name)] = merged
+
+    field_types = spec.get("field_types", {})
+    for rule in rules_by_name.values():
+        field_name = rule["name"]
+        if "allowed_values" not in rule and field_name in base_payload:
+            rule["allowed_values"] = [base_payload[field_name]]
+        if "type_invalid_values" not in rule:
+            field_type = rule.get("type") or field_types.get(field_name)
+            if field_type:
+                rule["type_invalid_values"] = [mismatch_value(str(field_type))]
+        if "tamper_values" not in rule:
+            rule["tamper_values"] = [rule.get("tamper_value", "__AUTO_HIDDEN_TAMPER__")]
+        if "unauthorized_values" not in rule:
+            rule["unauthorized_values"] = [rule.get("unauthorized_value", "__AUTO_HIDDEN_UNAUTHORIZED__")]
+
+    return list(rules_by_name.values())
+
+
+def hidden_value_variants(base_payload: Dict[str, Any], spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+    variants: List[Dict[str, Any]] = []
+    for rule in normalize_hidden_fields(spec, base_payload):
+        field_name = rule["name"]
+        if rule.get("legacy_override_only"):
+            for field_value in listify(rule.get("tamper_values")):
+                variants.append(
+                    {
+                        "name": f"hidden field override {field_name}",
+                        "payload": mutate_set(base_payload, field_name, field_value),
+                    }
+                )
+            continue
+        coverage_groups = [
+            ("hidden allowed", "allowed_values"),
+            ("hidden type invalid", "type_invalid_values"),
+            ("hidden business invalid", "business_invalid_values"),
+            ("hidden tamper", "tamper_values"),
+            ("hidden unauthorized", "unauthorized_values"),
+        ]
+        for label, key in coverage_groups:
+            for index, field_value in enumerate(listify(rule.get(key)), start=1):
+                suffix = f" {index}" if len(listify(rule.get(key))) > 1 else ""
+                variants.append(
+                    {
+                        "name": f"{label} {field_name}{suffix}",
+                        "payload": mutate_set(base_payload, field_name, field_value),
+                    }
+                )
+    return variants
+
+
 def boundary_variants(base_payload: Dict[str, Any], field_name: str, boundary: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
     cases: List[Tuple[str, Dict[str, Any]]] = []
     if "min" in boundary:
@@ -279,7 +377,6 @@ def generate_variants(base_payload: Dict[str, Any], spec: Dict[str, Any]) -> Lis
     variants: List[Dict[str, Any]] = []
     required_fields = spec.get("required_fields", [])
     optional_fields = spec.get("optional_fields", [])
-    hidden_fields = spec.get("hidden_fields", [])
     field_types = spec.get("field_types", {})
     boundary_values = spec.get("boundary_values", {})
     extra_fields = spec.get("extra_fields") or {"__unexpectedField": "unexpected"}
@@ -305,8 +402,7 @@ def generate_variants(base_payload: Dict[str, Any], spec: Dict[str, Any]) -> Lis
             for case_name, payload in boundary_variants(base_payload, field_name, boundary):
                 variants.append({"name": case_name, "payload": payload})
 
-    for field_name in hidden_fields:
-        variants.append({"name": f"hidden field override {field_name}", "payload": mutate_set(base_payload, field_name, "__AUTO_HIDDEN__")})
+    variants.extend(hidden_value_variants(base_payload, spec))
 
     extra_payload = dict(base_payload)
     extra_payload.update(extra_fields)
